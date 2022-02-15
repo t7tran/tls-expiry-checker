@@ -1,5 +1,8 @@
 # tls-expiry-checker
-Checking TLS certificate expiration before expiry date
+
+Checking TLS certificate expiration before expiry date.
+
+The script uses `openssl` and supports verifying origin TLS certificates of those servers hosted behind Cloudflare.
 
 ```
 # See all outputs
