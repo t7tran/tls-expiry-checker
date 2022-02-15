@@ -7,7 +7,7 @@ services:
     environment:
       # DEBUG: 'true'
       VERBOSE: 'true'
-      WARNING_DAYS: 55
+      WARNING_DAYS: 55 # default 15
       EXIT_ON_ERROR: end # first, end or empty
       TARGET_DOMAIN_PORT_IPS: |
         one.one.one.one:443:1.1.1.1
