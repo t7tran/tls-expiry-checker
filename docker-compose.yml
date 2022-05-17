@@ -1,7 +1,7 @@
 version: '3.7'
 services:
   checker:
-    image: t7tran/tls-expiry-checker:0.1.0
+    image: t7tran/tls-expiry-checker:0.2.0
     read_only: true
     user: checker
     environment:
@@ -14,3 +14,5 @@ services:
         one.one.one.one:1.1.1.1
         one.one.one.one:443
         one.one.one.one
+      SMTP_TARGET_DOMAIN_PORT_IPS: |
+        smtp.sendgrid.net:2525

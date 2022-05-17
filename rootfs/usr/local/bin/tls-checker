@@ -22,7 +22,7 @@ errorExitLater() {
 	exitCode=1
 }
 
-[[ -z "$TARGET_DOMAIN_PORT_IPS" ]] && errorExitNow TARGET_DOMAIN_PORT_IPS undefined
+[[ -z "$TARGET_DOMAIN_PORT_IPS" && -z "$SMTP_TARGET_DOMAIN_PORT_IPS" ]] && errorExitNow TARGET_DOMAIN_PORT_IPS and/or SMTP_TARGET_DOMAIN_PORT_IPS must be defined
 
 writeLog=error
 [[ "$EXIT_ON_ERROR" = "first" ]] && writeLog=errorExitNow
@@ -32,26 +32,28 @@ warningDays=15
 [[ "$WARNING_DAYS" =~ ^[0-9]+$ ]] && warningDays=$WARNING_DAYS
 
 checkEntry() {
+	local entry=${1}
 	local fields=(${1//:/ })
+	shift
 	local servername=${fields[0]}
 	if [[ -z "$servername" ]]; then
-		errorExitLater Invalid entry ${1}
+		errorExitLater Invalid entry $entry
 	else
-		log Checking entry ${1}
+		log Checking entry $entry
 
 		local port=${fields[1]}
 		local ip=${fields[2]}
 		# omitted port
 		[[ -z "$ip" && "$port" =~ ^[0-9]+(.[0-9]+){3}$ ]] && ip=$port && port=
 		# error cases
-		[[ -n "$port" && ! "$port" =~ ^[0-9]+$ ]] && errorExitLater Invalid entry ${1}
-		[[ -n "$ip" && ! "$ip" =~ ^[0-9]+(.[0-9]+){3}$ ]] && errorExitLater Invalid entry ${1}
+		[[ -n "$port" && ! "$port" =~ ^[0-9]+$ ]] && errorExitLater Invalid entry $entry
+		[[ -n "$ip" && ! "$ip" =~ ^[0-9]+(.[0-9]+){3}$ ]] && errorExitLater Invalid entry $entry
 		# credit https://stackoverflow.com/a/66921470/3151014
-		
+
 		log Parsed as server name $servername hosted at ${ip:-$servername} on port ${port:-443}
 
-		local remainingDays=$(( ($(date -d "$(echo | openssl s_client -servername $servername -connect ${ip:-$servername}:${port:-443} 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)" '+%s') - $(date '+%s')) / 86400 ))
-		
+		local remainingDays=$(( ($(date -d "$(echo | openssl s_client -servername $servername -connect ${ip:-$servername}:${port:-443} "$@" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)" '+%s') - $(date '+%s')) / 86400 ))
+
 		log $servername certificate is still valid for $remainingDays days
 		[[ $remainingDays -le $warningDays ]] && $writeLog $servername certificate is expiring in $remainingDays days
 	fi
@@ -59,6 +61,9 @@ checkEntry() {
 
 for entry in $TARGET_DOMAIN_PORT_IPS; do
 	checkEntry $entry
+done
+for entry in $SMTP_TARGET_DOMAIN_PORT_IPS; do
+	checkEntry $entry -starttls smtp
 done
 
 exit $exitCode
