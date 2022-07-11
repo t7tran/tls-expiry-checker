@@ -29,9 +29,66 @@ writeLog=error
 [[ "$EXIT_ON_ERROR" = "end" ]] && writeLog=errorExitLater
 
 warningDays=15
-[[ "$WARNING_DAYS" =~ ^[0-9]+$ ]] && warningDays=$WARNING_DAYS
+[[ "$WARNING_DAYS" =~ ^[1-9][0-9]*$ ]] && warningDays=$WARNING_DAYS
+uptimeWait=0
+[[ "$UPTIME_WAIT" =~ ^[1-9][0-9]*$ ]] && uptimeWait=$UPTIME_WAIT
+uptimeTimeout=3
+[[ "$UPTIME_TIMEOUT" =~ ^[1-9][0-9]*$ ]] && uptimeTimeout=$UPTIME_TIMEOUT
+uptimeSleep=3
+[[ "$UPTIME_SLEEP" =~ ^[1-9][0-9]*$ ]] && uptimeSleep=$UPTIME_SLEEP
+
+uptimeTLS() {
+	local server port ip last command code
+	server=${1:?servername}
+	port=${2:?port}
+	ip=${3}
+	command=( curl --max-time ${uptimeTimeout} )
+
+	if [[ -n "$ip" ]]; then
+		command+=( --resolve $servername:$port:$ip )
+	fi
+
+	code=`"${command[@]}" -o /dev/null -w "%{http_code}" -s https://$servername:$port`
+	if [[ ",${UPTIME_CODES:-200,202,302}," == *",${code:-000},"* ]]; then
+		return
+	fi
+
+	echo ${code:-000}
+}
+uptimeSmtp() {
+	local server port ip last code
+	server=${1:?servername}
+	port=${2:?port}
+	ip=${3}
+
+	nc -zw3 ${ip:-$server} $port
+	code=$?
+
+	if [[ $code -ne 0 ]]; then
+		echo $code
+	fi
+}
+
+uptimeCommand=uptimeTLS
+checkUptime() {
+	if [[ $uptimeWait -le 0 ]]; then
+		return
+	fi
+
+	local code
+	last=`date +%s`
+	while [[ $((`date +%s` - $last)) -lt $uptimeWait ]]; do
+		code=`$uptimeCommand "$@"`
+		if [[ -z "$code" ]]; then
+			return
+		fi
+		sleep ${uptimeSleep}
+	done
+	echo ${code:-000}
+}
 
 checkEntry() {
+	local code
 	local entry=${1}
 	local fields=(${1//:/ })
 	shift
@@ -52,6 +109,16 @@ checkEntry() {
 
 		log Parsed as server name $servername hosted at ${ip:-$servername} on port ${port:-443}
 
+		code=`checkUptime $servername ${port:-443} ${ip}`
+		if [[ -n $code ]]; then
+			if [[ "$UPTIME_ERROR_IGNORED" == "true" ]]; then
+				log "Ignored entry $entry, unreachable/unavailableafter $uptimeWait seconds (code=$code)"
+			else
+				$writeLog "Entry $entry unreachable/unavailableafter $uptimeWait seconds (code=$code)"
+			fi
+			return
+		fi
+
 		local remainingDays=$(( ($(date -d "$(echo | openssl s_client -servername $servername -connect ${ip:-$servername}:${port:-443} "$@" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)" '+%s') - $(date '+%s')) / 86400 ))
 
 		log $servername certificate is still valid for $remainingDays days
@@ -59,9 +126,11 @@ checkEntry() {
 	fi
 }
 
+uptimeCommand=uptimeTLS
 for entry in $TARGET_DOMAIN_PORT_IPS; do
 	checkEntry $entry
 done
+uptimeCommand=uptimeSmtp
 for entry in $SMTP_TARGET_DOMAIN_PORT_IPS; do
 	checkEntry $entry -starttls smtp
 done

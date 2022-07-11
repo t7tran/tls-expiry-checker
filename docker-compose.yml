@@ -1,13 +1,18 @@
 version: '3.7'
 services:
   checker:
-    image: t7tran/tls-expiry-checker:0.2.0
+    image: t7tran/tls-expiry-checker:0.3.0
     read_only: true
     user: checker
     environment:
       # DEBUG: 'true'
       VERBOSE: 'true'
-      WARNING_DAYS: 55 # default 15
+      WARNING_DAYS: 55              # default 15
+      UPTIME_CODES: 200,202,302     # default 200,202,302
+      UPTIME_TIMEOUT: 3             # default 3
+      UPTIME_SLEEP: 3               # default 3
+      UPTIME_ERROR_IGNORED: 'false' # default false
+      UPTIME_WAIT: 3
       EXIT_ON_ERROR: end # first, end or empty
       TARGET_DOMAIN_PORT_IPS: |
         one.one.one.one:443:1.1.1.1
